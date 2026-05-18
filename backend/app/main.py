@@ -15,6 +15,10 @@ from app.auth.jwt_handler import create_access_token
 from fastapi import Depends
 from app.auth.dependencies import get_current_user
 
+# ML part
+from ml.predict import predict_category
+
+
 app = FastAPI()
 
 # Create tables
@@ -89,25 +93,32 @@ def create_complaint(
         User.email == user["sub"]
     ).first()
 
+    # ML prediction
+    predicted_category = predict_category(
+        data.description
+    )
+
+    # Create complaint
     complaint = Complaint(
         title=data.title,
         description=data.description,
         latitude=data.latitude,
         longitude=data.longitude,
         status="OPEN",
+        category=predicted_category,
         user_id=db_user.id
     )
-
     db.add(complaint)
     db.commit()
     db.refresh(complaint)
 
     return {
+
         "message": "Complaint created",
         "complaint_id": complaint.id,
-        "created_by": db_user.email
+        "created_by": db_user.email,
+        "predicted_category": predicted_category
     }
-
 @app.get("/my-complaints")
 def get_my_complaints(
     user=Depends(get_current_user)
@@ -131,7 +142,8 @@ def get_my_complaints(
             "id": complaint.id,
             "title": complaint.title,
             "description": complaint.description,
-            "status": complaint.status
+            "status": complaint.status,
+            "category": complaint.category
         })
 
     return result

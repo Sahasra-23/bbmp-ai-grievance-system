@@ -52,3 +52,5 @@ class Complaint(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     category_id = Column(Integer, ForeignKey("categories.id"))
     ward_id = Column(Integer, ForeignKey("wards.id"))
+
+    category = Column(String)

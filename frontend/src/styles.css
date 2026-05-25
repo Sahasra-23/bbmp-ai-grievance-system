@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    margin: 0;
+    font-family: Verdana, Geneva, sans-serif;
+  }
+
+  ::selection {
+    background: #fca311;
+    color: #14213d;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-[#061a3a] outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-[#0b4f92] px-6 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/20 transition hover:-translate-y-0.5 hover:bg-[#062b57] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-[#0b4f92];
+  }
+}

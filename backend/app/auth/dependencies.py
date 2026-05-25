@@ -10,9 +10,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
 
-    token = credentials.credentials.replace("Bearer ", "")
-
-    print("RAW TOKEN:", token)
+    token = credentials.credentials
 
     payload = verify_token(token)
 

@@ -6,3 +6,7 @@ class ComplaintCreate(BaseModel):
     description: str
     latitude: float
     longitude: float
+
+
+class ComplaintStatusUpdate(BaseModel):
+    status: str

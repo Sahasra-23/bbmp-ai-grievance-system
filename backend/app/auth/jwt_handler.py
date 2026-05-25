@@ -32,14 +32,8 @@ def verify_token(token: str):
             algorithms=[ALGORITHM]
         )
 
-        # DEBUG PRINTS
-        print("TOKEN:", token)
-        print("PAYLOAD:", payload)
-
         return payload
 
     except JWTError as e:
-
-        print("JWT ERROR:", e)
 
         return None

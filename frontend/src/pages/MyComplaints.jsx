@@ -1,72 +1,131 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { getApiError } from "../api";
 
-const STATUS_OPTIONS = ["OPEN", "WORKING", "CLOSED"];
-const STATUS_TRANSITIONS = {
-  OPEN: ["OPEN", "WORKING", "CLOSED"],
-  WORKING: ["WORKING", "CLOSED"],
-  CLOSED: ["CLOSED"],
-};
+const CATEGORY_OPTIONS = [
+  "Roads",
+  "Sanitation",
+  "Water Supply",
+  "Electricity",
+  "Drainage",
+  "Garbage",
+  "Street Light",
+  "Traffic",
+  "Other",
+];
 
-function StatusPill({ status }) {
-  const label = status || "UNKNOWN";
-  const statusClass = {
-    OPEN: "bg-sky-100 text-sky-800 ring-sky-200",
-    WORKING: "bg-amber-100 text-amber-800 ring-amber-200",
-    CLOSED: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-  }[label] || "bg-slate-100 text-slate-700 ring-slate-200";
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "N/A";
+  }
+  const numeric = Number(value);
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  return `${percent.toFixed(2)}%`;
+}
+
+function formatDateTime(value) {
+  if (!value) return { date: "N/A", time: "N/A" };
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: "N/A", time: "N/A" };
+
+  return {
+    date: new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(date),
+    time: new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date),
+  };
+}
+
+function statusLabel(status) {
+  const value = (status || "OPEN").toUpperCase();
+  if (value === "WORKING") return "IN PROGRESS";
+  if (value === "CLOSED") return "RESOLVED";
+  if (value === "REJECTED") return "REJECTED";
+  return "OPEN";
+}
+
+function StatusBadge({ status }) {
+  const label = statusLabel(status);
+  const classes = {
+    OPEN: "bg-amber-100 text-amber-800 ring-amber-200",
+    "IN PROGRESS": "bg-sky-100 text-sky-800 ring-sky-200",
+    RESOLVED: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+    REJECTED: "bg-rose-100 text-rose-800 ring-rose-200",
+  }[label];
 
   return (
-    <span className={`rounded-full px-4 py-1.5 text-xs font-black tracking-[0.16em] ring-1 ${statusClass}`}>
+    <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black tracking-[0.14em] ring-1 ${classes}`}>
       {label}
     </span>
   );
 }
 
-function getAllowedStatuses(status) {
-  return STATUS_TRANSITIONS[status || "OPEN"] || ["CLOSED"];
+function descriptionSnippet(text) {
+  if (!text) return "";
+  return text.length > 140 ? `${text.slice(0, 140).trim()}...` : text;
 }
 
 export default function MyComplaints() {
   const [complaints, setComplaints] = useState([]);
-  const [message, setMessage] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [sortOrder, setSortOrder] = useState("Newest");
   const [statusMessage, setStatusMessage] = useState("");
   const [statusMessageType, setStatusMessageType] = useState("success");
-  const [loading, setLoading] = useState(true);
-  const [selectedComplaint, setSelectedComplaint] = useState(null);
-  const [selectedStatuses, setSelectedStatuses] = useState({});
-  const [updatingComplaintId, setUpdatingComplaintId] = useState(null);
+  const [savingId, setSavingId] = useState(null);
+  const [categoryValues, setCategoryValues] = useState({});
+  const [statusValues, setStatusValues] = useState({});
 
-  const loadComplaints = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
-    setMessage("");
+    setError("");
 
     try {
-      const { data } = await api.get("/my-complaints");
-      const complaintList = Array.isArray(data) ? data : [];
+      const [complaintsResponse, profileResponse] = await Promise.all([
+        api.get("/my-complaints"),
+        api.get("/me"),
+      ]);
+
+      const complaintList = Array.isArray(complaintsResponse.data) ? complaintsResponse.data : [];
       setComplaints(complaintList);
-      setSelectedStatuses(
-        complaintList.reduce((statusMap, complaint) => {
-          statusMap[complaint.id] = complaint.status || "OPEN";
-          return statusMap;
+      setProfile(profileResponse.data || null);
+      setCategoryValues(
+        complaintList.reduce((accumulator, complaint) => {
+          accumulator[complaint.id] = complaint.category || "Other";
+          return accumulator;
         }, {})
       );
-    } catch (error) {
-      setMessage(getApiError(error, "Unable to fetch complaints. Please try again."));
+      setStatusValues(
+        complaintList.reduce((accumulator, complaint) => {
+          accumulator[complaint.id] = complaint.status || "OPEN";
+          return accumulator;
+        }, {})
+      );
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to load dashboard."));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadComplaints();
-  }, [loadComplaints]);
+    loadDashboard();
+  }, [loadDashboard]);
 
   useEffect(() => {
     function closeOnEscape(event) {
       if (event.key === "Escape") {
-        setSelectedComplaint(null);
+        setExpandedId(null);
       }
     }
 
@@ -74,15 +133,36 @@ export default function MyComplaints() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
-  function updateSelectedStatus(complaintId, status) {
-    setSelectedStatuses((current) => ({
-      ...current,
-      [complaintId]: status,
-    }));
-  }
+  const summary = profile?.summary || {};
+
+  const categoryOptions = useMemo(() => {
+    const fromData = complaints.map((complaint) => complaint.category).filter(Boolean);
+    return ["All", ...new Set([...CATEGORY_OPTIONS, ...fromData])];
+  }, [complaints]);
+
+  const visibleComplaints = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = complaints.filter((complaint) => {
+      const titleMatch = complaint.title?.toLowerCase().includes(query);
+      const categoryMatch =
+        categoryFilter === "All" || (complaint.category || "Other") === categoryFilter;
+      const statusMatch =
+        statusFilter === "All" || statusLabel(complaint.status) === statusFilter;
+
+      return (query === "" || titleMatch) && categoryMatch && statusMatch;
+    });
+
+    filtered.sort((left, right) => {
+      const leftTime = new Date(left.created_at || 0).getTime();
+      const rightTime = new Date(right.created_at || 0).getTime();
+      return sortOrder === "Oldest" ? leftTime - rightTime : rightTime - leftTime;
+    });
+
+    return filtered;
+  }, [complaints, search, categoryFilter, statusFilter, sortOrder]);
 
   async function handleStatusUpdate(complaint) {
-    const nextStatus = selectedStatuses[complaint.id] || complaint.status;
+    const nextStatus = statusValues[complaint.id] || complaint.status || "OPEN";
 
     if (nextStatus === complaint.status) {
       setStatusMessageType("error");
@@ -90,7 +170,7 @@ export default function MyComplaints() {
       return;
     }
 
-    setUpdatingComplaintId(complaint.id);
+    setSavingId(complaint.id);
     setStatusMessage("");
 
     try {
@@ -98,66 +178,92 @@ export default function MyComplaints() {
         status: nextStatus,
       });
 
-      setComplaints((currentComplaints) =>
-        currentComplaints.map((item) =>
-          item.id === complaint.id ? data : item
-        )
-      );
-      setSelectedStatuses((current) => ({
-        ...current,
-        [complaint.id]: data.status,
-      }));
-      setSelectedComplaint((current) =>
-        current?.id === complaint.id ? data : current
+      setComplaints((current) =>
+        current.map((item) => (item.id === complaint.id ? data : item))
       );
       setStatusMessageType("success");
-      setStatusMessage(`Status updated to ${data.status}.`);
-    } catch (error) {
+      setStatusMessage(`Status updated to ${statusLabel(data.status)}.`);
+    } catch (requestError) {
       setStatusMessageType("error");
-      setStatusMessage(getApiError(error, "Unable to update complaint status."));
+      setStatusMessage(getApiError(requestError, "Unable to update complaint status."));
     } finally {
-      setUpdatingComplaintId(null);
+      setSavingId(null);
     }
   }
 
-  return (
-    <section className="relative py-8">
-      <div className="pointer-events-none absolute inset-x-[-6rem] top-0 -z-10 h-72 rounded-[3rem] bg-gradient-to-r from-sky-100 via-white to-cyan-100 blur-3xl" />
+  async function handleCategorySave(complaint) {
+    const selectedCategory = categoryValues[complaint.id] || complaint.category || "Other";
 
-      <div className="mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-[#0a7ea4] p-6 text-white shadow-civic sm:p-8">
+    if (selectedCategory === complaint.category) {
+      setStatusMessageType("error");
+      setStatusMessage("Choose a different category before saving.");
+      return;
+    }
+
+    setSavingId(complaint.id);
+    setStatusMessage("");
+
+    try {
+      const { data } = await api.patch(`/complaints/${complaint.id}/category`, {
+        category: selectedCategory,
+      });
+
+      setComplaints((current) =>
+        current.map((item) => (item.id === complaint.id ? data : item))
+      );
+      setStatusMessageType("success");
+      setStatusMessage("Category updated successfully.");
+    } catch (requestError) {
+      setStatusMessageType("error");
+      setStatusMessage(getApiError(requestError, "Unable to update complaint category."));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  const metrics = [
+    { label: "Total Complaints", value: summary.total_complaints ?? complaints.length },
+    { label: "Pending", value: summary.pending ?? 0 },
+    { label: "Resolved", value: summary.resolved ?? 0 },
+    { label: "Rejected", value: summary.rejected ?? 0 },
+    { label: "AI Accepted", value: summary.ai_accepted ?? 0 },
+    { label: "AI Corrected", value: summary.ai_corrected ?? 0 },
+    { label: "AI Acceptance Rate", value: formatPercent(summary.acceptance_rate) },
+    { label: "Latest Complaint", value: summary.latest_complaint?.title || "N/A" },
+  ];
+
+  return (
+    <section className="space-y-8 py-6">
+      <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-[#0a7ea4] p-6 text-white shadow-civic sm:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+          <div className="max-w-3xl">
             <p className="text-sm font-black uppercase tracking-[0.36em] text-cyan-200">Dashboard</p>
-            <h1 className="mt-3 font-display text-5xl font-black leading-none sm:text-6xl">My complaints</h1>
-            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-white/72">
-              Track civic issues, review AI classification, and move each complaint through its status lifecycle.
+            <h1 className="mt-3 font-display text-5xl font-black leading-none sm:text-6xl">My Complaints Dashboard</h1>
+            <p className="mt-4 text-sm font-semibold leading-7 text-white/75">
+              Track civic requests, review AI categorization, and correct categories when needed.
             </p>
           </div>
           <Link
             className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-black text-[#062b57] shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:bg-cyan-50"
             to="/complaints/new"
           >
-            File another complaint
+            File Complaint
           </Link>
         </div>
       </div>
 
-      {loading ? <div className="rounded-3xl bg-white/80 p-6 font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">Loading complaints...</div> : null}
-
-      {statusMessage ? (
-        <div className={`mb-5 rounded-3xl p-5 text-sm font-bold shadow-sm ${
-          statusMessageType === "success" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-        }`}>
-          {statusMessage}
+      {loading ? (
+        <div className="rounded-3xl bg-white/80 p-6 font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">
+          Loading dashboard...
         </div>
       ) : null}
 
-      {message ? (
+      {error ? (
         <div className="rounded-3xl bg-rose-50 p-6 font-bold text-rose-700 shadow-sm ring-1 ring-rose-100">
-          <p>{message}</p>
+          <p>{error}</p>
           <button
             className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-black text-rose-700 transition hover:bg-rose-100"
-            onClick={loadComplaints}
+            onClick={loadDashboard}
             type="button"
           >
             Retry
@@ -165,132 +271,247 @@ export default function MyComplaints() {
         </div>
       ) : null}
 
-      {!loading && !message && complaints.length === 0 ? (
-        <div className="rounded-[2rem] border border-dashed border-sky-300 bg-white/75 p-8 text-center shadow-sm">
-          <h2 className="font-display text-3xl font-bold text-[#062b57]">No complaints yet.</h2>
-          <p className="mt-2 text-slate-500">Your submitted complaints will appear here with status and AI category.</p>
+      {statusMessage ? (
+        <div className={`rounded-3xl p-5 text-sm font-bold shadow-sm ${
+          statusMessageType === "success"
+            ? "bg-sky-50 text-[#0b6f8f] ring-1 ring-sky-100"
+            : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+        }`}>
+          {statusMessage}
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {complaints.map((complaint) => {
-          const allowedStatuses = getAllowedStatuses(complaint.status);
-          const selectedStatus = selectedStatuses[complaint.id] || complaint.status || "OPEN";
-          const isClosed = complaint.status === "CLOSED";
-          const isUpdating = updatingComplaintId === complaint.id;
-          const cannotUpdate = isClosed || isUpdating || selectedStatus === complaint.status;
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-[1.75rem] bg-white/90 p-5 shadow-lg shadow-slate-900/8 ring-1 ring-slate-200/80">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{metric.label}</p>
+            <p className="mt-3 font-display text-2xl font-black text-[#061a3a]">{metric.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 rounded-[1.75rem] bg-white/90 p-5 shadow-lg shadow-slate-900/8 ring-1 ring-slate-200/80 lg:grid-cols-4">
+        <input
+          className="input"
+          placeholder="Search by title"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          {categoryOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          {["All", "OPEN", "IN PROGRESS", "RESOLVED", "REJECTED"].map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <select className="input" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+          {["Newest", "Oldest"].map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!loading && !error && visibleComplaints.length === 0 ? (
+        <div className="rounded-[2rem] border border-dashed border-sky-300 bg-white/75 p-8 text-center shadow-sm">
+          <h2 className="font-display text-3xl font-bold text-[#062b57]">No complaints found.</h2>
+          <p className="mt-2 text-slate-500">Try a different search or filter, or file a new complaint.</p>
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        {visibleComplaints.map((complaint) => {
+          const expanded = expandedId === complaint.id;
+          const { date, time } = formatDateTime(complaint.created_at);
+          const currentStatus = complaint.status || "OPEN";
+          const selectedCategory = categoryValues[complaint.id] || complaint.category || "Other";
+          const selectedStatus = statusValues[complaint.id] || complaint.status || "OPEN";
+          const confidence = formatPercent(complaint.prediction_confidence);
 
           return (
-            <article
-              key={complaint.id}
-              className="group relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 text-left shadow-xl shadow-slate-900/10 backdrop-blur transition hover:-translate-y-1 hover:shadow-civic"
-            >
-              <div className="absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-[#0b4f92] via-[#0a7ea4] to-cyan-300" />
+            <article key={complaint.id} className="overflow-hidden rounded-[2rem] bg-white/95 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80">
               <button
-                onClick={() => setSelectedComplaint(complaint)}
-                className="block w-full rounded-3xl text-left focus:outline-none focus:ring-4 focus:ring-sky-200"
+                className="w-full text-left"
                 type="button"
+                onClick={() => setExpandedId(expanded ? null : complaint.id)}
               >
-                <p className="mb-3 text-xs font-black uppercase tracking-[0.24em] text-slate-400">Complaint #{complaint.id}</p>
-                <div className="flex items-start justify-between gap-4">
-                  <h2 className="font-display text-3xl font-black leading-tight text-[#061a3a]">{complaint.title}</h2>
-                  <StatusPill status={complaint.status} />
-                </div>
-                <p className="mt-4 leading-7 text-slate-600">{complaint.description}</p>
-                <div className="mt-5 rounded-2xl bg-sky-50 px-4 py-3 text-sm font-black text-[#0b6f8f] ring-1 ring-sky-100">
-                  AI predicted category: {complaint.category || "Not predicted"}
+                <div className="h-2 bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-cyan-300" />
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Complaint #{complaint.id}</p>
+                      <h2 className="mt-2 font-display text-3xl font-black leading-tight text-[#061a3a]">{complaint.title}</h2>
+                    </div>
+                    <StatusBadge status={currentStatus} />
+                  </div>
+
+                  <p
+                    className="mt-4 leading-7 text-slate-600"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {descriptionSnippet(complaint.description)}
+                  </p>
+
+                  {complaint.image_url ? (
+                    <img
+                      alt={complaint.title}
+                      className="mt-5 h-48 w-full rounded-3xl object-cover ring-1 ring-sky-100"
+                      src={complaint.image_url}
+                    />
+                  ) : null}
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-sky-50 px-4 py-3 ring-1 ring-sky-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f]">Category</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.category || "Pending"}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidence}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-600">
+                    <span>Submitted {date}</span>
+                    <span>•</span>
+                    <span>{time}</span>
+                    <span>•</span>
+                    <span>Location {complaint.latitude}, {complaint.longitude}</span>
+                  </div>
                 </div>
               </button>
 
-              <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-                <label className="block text-sm font-black uppercase tracking-[0.16em] text-slate-500" htmlFor={`status-${complaint.id}`}>
-                  Update status
-                </label>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <select
-                    id={`status-${complaint.id}`}
-                    className="input"
-                    disabled={isClosed || isUpdating}
-                    onChange={(event) => updateSelectedStatus(complaint.id, event.target.value)}
-                    value={selectedStatus}
-                  >
-                    {STATUS_OPTIONS.map((status) => (
-                      <option
-                        disabled={!allowedStatuses.includes(status)}
-                        key={status}
-                        value={status}
+              {expanded ? (
+                <div className="border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                      <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Full Description</h3>
+                      <p className="mt-3 leading-8 text-slate-600">{complaint.description}</p>
+                    </div>
+                    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                      <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Complaint Image</h3>
+                      {complaint.image_url ? (
+                        <img
+                          alt={complaint.title}
+                          className="mt-3 max-h-80 w-full rounded-2xl object-cover"
+                          src={complaint.image_url}
+                        />
+                      ) : (
+                        <p className="mt-3 text-slate-500">No image available.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Latitude</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.latitude}</p>
+                    </div>
+                    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Longitude</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.longitude}</p>
+                    </div>
+                    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">AI Analysis Status</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.analysis_status || "PENDING"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-3xl bg-sky-50 p-5 ring-1 ring-sky-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f]">Current Category</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.category || "Pending"}</p>
+                    </div>
+                    <div className="rounded-3xl bg-white p-5 ring-1 ring-slate-100">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
+                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidence}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[1.75rem] bg-white p-5 ring-1 ring-slate-100">
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Is this category correct?</p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                      <select
+                        className="input"
+                        value={selectedCategory}
+                        onChange={(event) =>
+                          setCategoryValues((current) => ({
+                            ...current,
+                            [complaint.id]: event.target.value,
+                          }))
+                        }
                       >
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#0b4f92] px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/15 transition hover:-translate-y-0.5 hover:bg-[#062b57] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:bg-[#0b4f92]"
-                    disabled={cannotUpdate}
-                    onClick={() => handleStatusUpdate(complaint)}
-                    type="button"
-                  >
-                    {isUpdating ? "Updating..." : "Update Status"}
-                  </button>
+                        {CATEGORY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn-primary"
+                        disabled={savingId === complaint.id}
+                        onClick={() => handleCategorySave(complaint)}
+                        type="button"
+                      >
+                        Save Category
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[1.75rem] bg-white p-5 ring-1 ring-slate-100">
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Update Status</p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                      <select
+                        className="input"
+                        value={selectedStatus}
+                        onChange={(event) =>
+                          setStatusValues((current) => ({
+                            ...current,
+                            [complaint.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        {["OPEN", "WORKING", "CLOSED"].map((option) => (
+                          <option key={option} value={option}>
+                            {option === "WORKING" ? "IN PROGRESS" : option === "CLOSED" ? "RESOLVED" : option}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn-primary"
+                        disabled={savingId === complaint.id}
+                        onClick={() => handleStatusUpdate(complaint)}
+                        type="button"
+                      >
+                        {savingId === complaint.id ? "Updating..." : "Update Status"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[1.75rem] bg-slate-50 p-5 ring-1 ring-slate-100">
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Status History</p>
+                    <p className="mt-3 text-slate-600">Status history is not tracked yet. Current status: {statusLabel(currentStatus)}.</p>
+                  </div>
                 </div>
-                {isClosed ? (
-                  <p className="mt-3 text-sm font-semibold text-slate-500">Closed complaints cannot be reopened.</p>
-                ) : null}
-              </div>
+              ) : null}
             </article>
           );
         })}
       </div>
-
-      {selectedComplaint ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-5 py-8 backdrop-blur-md"
-          onClick={() => setSelectedComplaint(null)}
-          role="presentation"
-        >
-          <div
-            className="relative w-full max-w-3xl overflow-hidden rounded-[2.25rem] border border-white/80 bg-[#f8fbff] p-6 shadow-2xl shadow-slate-950/30 sm:p-8"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="complaint-title"
-          >
-            <div className="absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-cyan-300" />
-            <button
-              aria-label="Close complaint details"
-              className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white text-3xl font-black leading-none text-[#062b57] shadow-lg shadow-slate-900/10 ring-1 ring-slate-200 transition hover:bg-[#062b57] hover:text-white"
-              onClick={() => setSelectedComplaint(null)}
-              type="button"
-            >
-              &times;
-            </button>
-
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-[#0b6f8f]">Complaint details</p>
-            <div className="mt-4 flex flex-col gap-4 pr-20 sm:flex-row sm:items-start sm:justify-between">
-              <h2 id="complaint-title" className="font-display text-5xl font-black leading-tight text-[#061a3a]">
-                {selectedComplaint.title}
-              </h2>
-              <StatusPill status={selectedComplaint.status} />
-            </div>
-
-            <div className="mt-7 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-              <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Description</h3>
-              <p className="mt-3 leading-8 text-slate-600">{selectedComplaint.description}</p>
-            </div>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-sky-50 p-6 shadow-sm ring-1 ring-sky-100">
-                <h3 className="text-sm font-black uppercase tracking-[0.22em] text-[#0b6f8f]">AI predicted category</h3>
-                <p className="mt-3 font-display text-3xl font-black text-[#061a3a]">{selectedComplaint.category || "Not predicted"}</p>
-              </div>
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-                <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Complaint ID</h3>
-                <p className="mt-3 font-display text-3xl font-black text-[#061a3a]">#{selectedComplaint.id}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
+

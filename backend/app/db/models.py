@@ -45,6 +45,14 @@ class Complaint(Base):
 
     latitude = Column(Float)
     longitude = Column(Float)
+    image_path = Column(String)
+    text_prediction = Column(String)
+    image_prediction = Column(String)
+    prediction_confidence = Column(Float)
+    prediction_source = Column(String)
+    analysis_status = Column(String, default="PENDING")
+    user_corrected = Column(String, default="false")
+    category_verified = Column(String, default="false")
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -1,16 +1,82 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { getApiError } from "../api";
 import FormField from "../components/FormField";
 
 export default function FileComplaint() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ title: "", description: "", latitude: "", longitude: "" });
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("error");
-  const [prediction, setPrediction] = useState("");
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submittedComplaint, setSubmittedComplaint] = useState(null);
+  const [analysisComplaint, setAnalysisComplaint] = useState(null);
+
+  useEffect(() => {
+    if (!submittedComplaint?.complaint_id) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let pollTimer = null;
+
+    async function pollComplaint() {
+      try {
+        const { data } = await api.get(`/complaints/${submittedComplaint.complaint_id}`);
+
+        if (cancelled) {
+          return;
+        }
+
+        setAnalysisComplaint(data);
+
+        if (data.analysis_status === "COMPLETED" || data.analysis_status === "FAILED") {
+          if (pollTimer) {
+            window.clearInterval(pollTimer);
+          }
+          return;
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Unable to refresh analysis status.", error);
+        }
+      }
+    }
+
+    pollComplaint();
+    pollTimer = window.setInterval(pollComplaint, 3000);
+
+    const redirectTimer = window.setTimeout(() => {
+      navigate("/my-complaints", { replace: true });
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+      }
+      window.clearTimeout(redirectTimer);
+    };
+  }, [submittedComplaint?.complaint_id, navigate]);
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
+
+  function updateImage(event) {
+    const selectedImage = event.target.files?.[0];
+
+    setImage(selectedImage || null);
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    if (selectedImage) {
+      setImagePreview(URL.createObjectURL(selectedImage));
+    } else {
+      setImagePreview("");
+    }
   }
 
   function validateForm() {
@@ -35,6 +101,18 @@ export default function FileComplaint() {
       return "Longitude must be a valid number between -180 and 180.";
     }
 
+    if (image && !image.type.startsWith("image/")) {
+      return "Please upload a valid image file.";
+    }
+
+    if (!image) {
+      return "Please upload a complaint image for multimodal classification.";
+    }
+
+    if (image.size > 10 * 1024 * 1024) {
+      return "Image must be 10 MB or smaller.";
+    }
+
     return "";
   }
 
@@ -43,32 +121,37 @@ export default function FileComplaint() {
     if (loading) return;
 
     setLoading(true);
-    setMessage("");
-    setMessageType("error");
-    setPrediction("");
 
     try {
       const validationError = validateForm();
 
       if (validationError) {
-        setMessage(validationError);
+        window.alert(validationError);
         return;
       }
 
-      const payload = {
-        title: form.title.trim(),
-        description: form.description.trim(),
-        latitude: Number(form.latitude),
-        longitude: Number(form.longitude),
-      };
+      const payload = new FormData();
+      payload.append("title", form.title.trim());
+      payload.append("description", form.description.trim());
+      payload.append("latitude", Number(form.latitude));
+      payload.append("longitude", Number(form.longitude));
+
+      if (image) {
+        payload.append("image", image);
+      }
 
       const { data } = await api.post("/complaints", payload);
-      setMessageType("success");
-      setMessage(data.message || "Complaint created.");
-      setPrediction(data.predicted_category || "");
+      setSubmittedComplaint(data);
+      setAnalysisComplaint({
+        complaint_id: data.complaint_id,
+        analysis_status: "PENDING",
+      });
       setForm({ title: "", description: "", latitude: "", longitude: "" });
+      setImage(null);
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview("");
     } catch (error) {
-      setMessage(getApiError(error, "Unable to file complaint. Please check the form and try again."));
+      window.alert(getApiError(error, "Unable to file complaint. Please check the form and try again."));
     } finally {
       setLoading(false);
     }
@@ -101,14 +184,57 @@ export default function FileComplaint() {
               <input id="longitude" name="longitude" type="number" step="any" required value={form.longitude} onChange={updateField} className="input" placeholder="77.5946" />
             </FormField>
           </div>
+
+          <FormField label="Complaint image" id="image">
+            <input
+              id="image"
+              name="image"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              required
+              onChange={updateImage}
+              className="input file:mr-4 file:rounded-full file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-[#0b4f92]"
+            />
+          </FormField>
+
+          {imagePreview ? (
+            <div className="overflow-hidden rounded-3xl border border-sky-100 bg-sky-50 p-3">
+              <img
+                alt="Selected complaint preview"
+                className="max-h-72 w-full rounded-2xl object-cover"
+                src={imagePreview}
+              />
+            </div>
+          ) : null}
         </div>
 
-        {message ? (
-          <div className={`mt-5 rounded-2xl px-4 py-3 text-sm font-bold ${
-            messageType === "success" ? "bg-sky-50 text-[#0b6f8f]" : "bg-rose-50 text-rose-700"
-          }`}>
-            <p>{message}</p>
-            {prediction ? <p className="mt-2">AI predicted category: {prediction}</p> : null}
+        {submittedComplaint ? (
+          <div className="mt-5 rounded-[1.75rem] border border-sky-100 bg-sky-50 p-5 text-[#0b6f8f] shadow-sm">
+            <p className="text-sm font-black uppercase tracking-[0.22em]">Complaint Submitted Successfully</p>
+            <p className="mt-3 font-display text-3xl font-black text-[#061a3a]">Complaint ID #{submittedComplaint.complaint_id}</p>
+            <p className="mt-3 text-sm font-semibold text-slate-600">
+              {analysisComplaint?.analysis_status === "COMPLETED"
+                ? "AI Analysis Completed"
+                : analysisComplaint?.analysis_status === "FAILED"
+                  ? "AI analysis is still being finalized."
+                  : "AI analysis in progress..."}
+            </p>
+            {analysisComplaint?.analysis_status === "COMPLETED" ? (
+              <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Category</p>
+                  <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{analysisComplaint.category || "Completed"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
+                  <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">
+                    {analysisComplaint.prediction_confidence === null || analysisComplaint.prediction_confidence === undefined
+                      ? "N/A"
+                      : `${((Number(analysisComplaint.prediction_confidence) <= 1 ? Number(analysisComplaint.prediction_confidence) * 100 : Number(analysisComplaint.prediction_confidence))).toFixed(2)}%`}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

@@ -1,0 +1,10 @@
+              precision    recall  f1-score   support
+
+ electricity     0.9821    0.9821    0.9821        56
+       roads     0.8727    0.9412    0.9057        51
+  sanitation     0.9565    1.0000    0.9778        66
+       water     0.9333    0.8358    0.8819        67
+
+    accuracy                         0.9375       240
+   macro avg     0.9362    0.9398    0.9369       240
+weighted avg     0.9382    0.9375    0.9367       240

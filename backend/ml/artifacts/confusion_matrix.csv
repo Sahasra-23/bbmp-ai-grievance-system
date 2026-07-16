@@ -1,0 +1,5 @@
+,electricity,roads,sanitation,water
+electricity,55,0,0,1
+roads,0,48,0,3
+sanitation,0,0,66,0
+water,1,7,3,56

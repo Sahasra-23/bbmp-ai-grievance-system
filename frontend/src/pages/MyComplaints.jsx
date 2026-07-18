@@ -20,7 +20,7 @@ function formatPercent(value) {
   }
   const numeric = Number(value);
   const percent = numeric <= 1 ? numeric * 100 : numeric;
-  return `${percent.toFixed(2)}%`;
+  return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
 }
 
 function formatDateTime(value) {
@@ -70,6 +70,29 @@ function descriptionSnippet(text) {
   return text.length > 140 ? `${text.slice(0, 140).trim()}...` : text;
 }
 
+function normalizeStatusValue(value) {
+  const status = (value || "OPEN").toUpperCase();
+  if (status === "RESOLVED") return "CLOSED";
+  if (status === "IN PROGRESS") return "WORKING";
+  return status;
+}
+
+function updateResolvedCount(summary, currentStatus, nextStatus) {
+  if (!summary) return summary;
+
+  const previous = (currentStatus || "OPEN").toUpperCase();
+  const next = (nextStatus || "OPEN").toUpperCase();
+  const updated = { ...summary };
+
+  if (previous === "CLOSED") {
+    updated.resolved = Math.max((updated.resolved ?? 0) - 1, 0);
+  }
+  if (next === "CLOSED") {
+    updated.resolved = (updated.resolved ?? 0) + 1;
+  }
+
+  return updated;
+}
 export default function MyComplaints() {
   const [complaints, setComplaints] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -85,7 +108,7 @@ export default function MyComplaints() {
   const [savingId, setSavingId] = useState(null);
   const [categoryValues, setCategoryValues] = useState({});
   const [statusValues, setStatusValues] = useState({});
-
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -162,9 +185,10 @@ export default function MyComplaints() {
   }, [complaints, search, categoryFilter, statusFilter, sortOrder]);
 
   async function handleStatusUpdate(complaint) {
-    const nextStatus = statusValues[complaint.id] || complaint.status || "OPEN";
+    const nextStatus = normalizeStatusValue(statusValues[complaint.id] || complaint.status || "OPEN");
+    const currentStatus = normalizeStatusValue(complaint.status || "OPEN");
 
-    if (nextStatus === complaint.status) {
+    if (nextStatus === currentStatus) {
       setStatusMessageType("error");
       setStatusMessage("Choose a different status before updating.");
       return;
@@ -181,6 +205,18 @@ export default function MyComplaints() {
       setComplaints((current) =>
         current.map((item) => (item.id === complaint.id ? data : item))
       );
+      setProfile((currentProfile) =>
+        currentProfile
+          ? {
+              ...currentProfile,
+              summary: updateResolvedCount(currentProfile.summary, currentStatus, nextStatus),
+            }
+          : currentProfile
+      );
+      setStatusValues((current) => ({
+        ...current,
+        [complaint.id]: data.status || nextStatus,
+      }));
       setStatusMessageType("success");
       setStatusMessage(`Status updated to ${statusLabel(data.status)}.`);
     } catch (requestError) {
@@ -190,7 +226,6 @@ export default function MyComplaints() {
       setSavingId(null);
     }
   }
-
   async function handleCategorySave(complaint) {
     const selectedCategory = categoryValues[complaint.id] || complaint.category || "Other";
 
@@ -226,14 +261,14 @@ export default function MyComplaints() {
     { label: "Pending", value: summary.pending ?? 0 },
     { label: "Resolved", value: summary.resolved ?? 0 },
     { label: "Rejected", value: summary.rejected ?? 0 },
-    { label: "AI Accepted", value: summary.ai_accepted ?? 0 },
-    { label: "AI Corrected", value: summary.ai_corrected ?? 0 },
-    { label: "AI Acceptance Rate", value: formatPercent(summary.acceptance_rate) },
+    { label: "Accepted AI Prediction", value: summary.ai_accepted ?? 0 },
+    { label: "Corrected Prediction", value: summary.ai_corrected ?? 0 },
+    { label: "Prediction Accuracy", value: formatPercent(summary.acceptance_rate) },
     { label: "Latest Complaint", value: summary.latest_complaint?.title || "N/A" },
   ];
 
   return (
-    <section className="space-y-8 py-6">
+    <section className="page-transition space-y-8 py-6">
       <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-[#0a7ea4] p-6 text-white shadow-civic sm:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
@@ -281,13 +316,23 @@ export default function MyComplaints() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-[1.75rem] bg-white/90 p-5 shadow-lg shadow-slate-900/8 ring-1 ring-slate-200/80">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{metric.label}</p>
-            <p className="mt-3 font-display text-2xl font-black text-[#061a3a]">{metric.value}</p>
+      <div className="ui-card overflow-hidden rounded-[1.75rem]">
+        <button className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-sky-50/60" type="button" onClick={() => setInsightsOpen((current) => !current)}>
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-[#062b57]">Dashboard Insights</p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">{insightsOpen ? "▲ Hide Insights" : "▼ Show Insights"}</p>
           </div>
-        ))}
+        </button>
+        <div className={`grid overflow-hidden transition-all duration-300 ease-out ${insightsOpen ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"}`}>
+          <div className="grid gap-4 border-t border-slate-100 p-5 md:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="ui-card ui-card-hover flex h-full min-h-[110px] flex-col justify-between rounded-[1.5rem] p-5">
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{metric.label}</p>
+                <p className="mt-3 break-words font-display text-2xl font-black leading-tight text-[#061a3a]">{metric.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 rounded-[1.75rem] bg-white/90 p-5 shadow-lg shadow-slate-900/8 ring-1 ring-slate-200/80 lg:grid-cols-4">
@@ -337,13 +382,13 @@ export default function MyComplaints() {
           const confidence = formatPercent(complaint.prediction_confidence);
 
           return (
-            <article key={complaint.id} className="overflow-hidden rounded-[2rem] bg-white/95 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80">
+            <article key={complaint.id} className="group overflow-hidden rounded-[2rem] bg-white/95 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-900/10">
               <button
                 className="w-full text-left"
                 type="button"
                 onClick={() => setExpandedId(expanded ? null : complaint.id)}
               >
-                <div className="h-2 bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-cyan-300" />
+                <div className="h-2 bg-gradient-to-r from-[#062b57] via-[#0b4f92] to-cyan-300 transition duration-300 group-hover:brightness-110" />
                 <div className="p-5 sm:p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -354,7 +399,7 @@ export default function MyComplaints() {
                   </div>
 
                   <p
-                    className="mt-4 leading-7 text-slate-600"
+                    className="mt-4 break-words leading-7 text-slate-600"
                     style={{
                       display: "-webkit-box",
                       WebkitLineClamp: 3,
@@ -368,19 +413,19 @@ export default function MyComplaints() {
                   {complaint.image_url ? (
                     <img
                       alt={complaint.title}
-                      className="mt-5 h-48 w-full rounded-3xl object-cover ring-1 ring-sky-100"
+                      className="mt-5 h-48 w-full rounded-3xl object-cover ring-1 ring-sky-100 transition duration-300 group-hover:scale-[1.01]"
                       src={complaint.image_url}
                     />
                   ) : null}
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl bg-sky-50 px-4 py-3 ring-1 ring-sky-100">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f]">Category</p>
-                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.category || "Pending"}</p>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f]">Predicted Category</p>
+                      <p className="mt-2 break-words font-display text-2xl font-black leading-tight text-[#061a3a]">{complaint.category || "Pending"}</p>
                     </div>
                     <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-100">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
-                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidence}</p>
+                      <p className="mt-2 flex min-h-[3rem] items-center justify-center break-words text-center font-display text-xl font-black leading-tight text-[#061a3a]">{confidence}</p>
                     </div>
                   </div>
 
@@ -389,7 +434,7 @@ export default function MyComplaints() {
                     <span>•</span>
                     <span>{time}</span>
                     <span>•</span>
-                    <span>Location {complaint.latitude}, {complaint.longitude}</span>
+                    <span className="break-words">Location {complaint.latitude}, {complaint.longitude}</span>
                   </div>
                 </div>
               </button>
@@ -433,11 +478,11 @@ export default function MyComplaints() {
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="rounded-3xl bg-sky-50 p-5 ring-1 ring-sky-100">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f]">Current Category</p>
-                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{complaint.category || "Pending"}</p>
+                      <p className="mt-2 break-words font-display text-2xl font-black leading-tight text-[#061a3a]">{complaint.category || "Pending"}</p>
                     </div>
                     <div className="rounded-3xl bg-white p-5 ring-1 ring-slate-100">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
-                      <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidence}</p>
+                      <p className="mt-2 flex min-h-[3rem] items-center justify-center break-words text-center font-display text-xl font-black leading-tight text-[#061a3a]">{confidence}</p>
                     </div>
                   </div>
 
@@ -514,4 +559,7 @@ export default function MyComplaints() {
     </section>
   );
 }
+
+
+
 

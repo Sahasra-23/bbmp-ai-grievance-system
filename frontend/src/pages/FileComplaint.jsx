@@ -34,12 +34,9 @@ export default function FileComplaint() {
           if (pollTimer) {
             window.clearInterval(pollTimer);
           }
-          return;
         }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Unable to refresh analysis status.", error);
-        }
+      } catch {
+        // Keep polling silent in the citizen UI.
       }
     }
 
@@ -47,7 +44,10 @@ export default function FileComplaint() {
     pollTimer = window.setInterval(pollComplaint, 3000);
 
     const redirectTimer = window.setTimeout(() => {
-      navigate("/my-complaints", { replace: true });
+      navigate("/my-complaints", {
+        replace: true,
+        state: { highlightComplaintId: submittedComplaint.complaint_id },
+      });
     }, 2000);
 
     return () => {
@@ -65,7 +65,6 @@ export default function FileComplaint() {
 
   function updateImage(event) {
     const selectedImage = event.target.files?.[0];
-
     setImage(selectedImage || null);
 
     if (imagePreview) {
@@ -85,34 +84,17 @@ export default function FileComplaint() {
     const latitude = Number(form.latitude);
     const longitude = Number(form.longitude);
 
-    if (title.length < 3) {
-      return "Title should be at least 3 characters.";
-    }
-
-    if (description.length < 10) {
-      return "Description should be at least 10 characters so the AI can classify it.";
-    }
-
+    if (title.length < 3) return "Title should be at least 3 characters.";
+    if (description.length < 10) return "Description should be at least 10 characters so the AI can classify it.";
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
       return "Latitude must be a valid number between -90 and 90.";
     }
-
     if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       return "Longitude must be a valid number between -180 and 180.";
     }
-
-    if (image && !image.type.startsWith("image/")) {
-      return "Please upload a valid image file.";
-    }
-
-    if (!image) {
-      return "Please upload a complaint image for multimodal classification.";
-    }
-
-    if (image.size > 10 * 1024 * 1024) {
-      return "Image must be 10 MB or smaller.";
-    }
-
+    if (image && !image.type.startsWith("image/")) return "Please upload a valid image file.";
+    if (!image) return "Please upload a complaint image for multimodal classification.";
+    if (image.size > 10 * 1024 * 1024) return "Image must be 10 MB or smaller.";
     return "";
   }
 
@@ -124,7 +106,6 @@ export default function FileComplaint() {
 
     try {
       const validationError = validateForm();
-
       if (validationError) {
         window.alert(validationError);
         return;
@@ -135,7 +116,6 @@ export default function FileComplaint() {
       payload.append("description", form.description.trim());
       payload.append("latitude", Number(form.latitude));
       payload.append("longitude", Number(form.longitude));
-
       if (image) {
         payload.append("image", image);
       }
@@ -157,12 +137,19 @@ export default function FileComplaint() {
     }
   }
 
+  const confidenceValue = analysisComplaint?.prediction_confidence;
+  const confidenceText = confidenceValue === null || confidenceValue === undefined
+    ? "N/A"
+    : `${((Number(confidenceValue) <= 1 ? Number(confidenceValue) * 100 : Number(confidenceValue))).toFixed(0)}%`;
+
   return (
     <section className="grid gap-8 py-8 lg:grid-cols-[0.82fr_1.18fr]">
       <aside className="rounded-[2rem] bg-gradient-to-br from-[#062b57] via-[#0b4f92] to-[#0a7ea4] p-7 text-white shadow-civic">
         <p className="text-sm font-black uppercase tracking-[0.28em] text-cyan-200">New complaint</p>
         <h1 className="mt-4 font-display text-5xl font-black leading-none">Tell Namma Fix what needs attention.</h1>
-        <p className="mt-5 leading-7 text-white/72">Add a clear title, describe the problem, and include latitude and longitude so the backend can store the location and predict the civic category.</p>
+        <p className="mt-5 leading-7 text-white/72">
+          Add a clear title, describe the problem, and include latitude and longitude so the backend can store the location and predict the civic category.
+        </p>
       </aside>
 
       <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8">
@@ -199,42 +186,25 @@ export default function FileComplaint() {
 
           {imagePreview ? (
             <div className="overflow-hidden rounded-3xl border border-sky-100 bg-sky-50 p-3">
-              <img
-                alt="Selected complaint preview"
-                className="max-h-72 w-full rounded-2xl object-cover"
-                src={imagePreview}
-              />
+              <img alt="Selected complaint preview" className="max-h-72 w-full rounded-2xl object-cover" src={imagePreview} />
             </div>
           ) : null}
         </div>
 
         {submittedComplaint ? (
           <div className="mt-5 rounded-[1.75rem] border border-sky-100 bg-sky-50 p-5 text-[#0b6f8f] shadow-sm">
-            <p className="text-sm font-black uppercase tracking-[0.22em]">Complaint Submitted Successfully</p>
+            <p className="text-sm font-black uppercase tracking-[0.22em]">Complaint submitted successfully</p>
             <p className="mt-3 font-display text-3xl font-black text-[#061a3a]">Complaint ID #{submittedComplaint.complaint_id}</p>
-            <p className="mt-3 text-sm font-semibold text-slate-600">
-              {analysisComplaint?.analysis_status === "COMPLETED"
-                ? "AI Analysis Completed"
-                : analysisComplaint?.analysis_status === "FAILED"
-                  ? "AI analysis is still being finalized."
-                  : "AI analysis in progress..."}
-            </p>
-            {analysisComplaint?.analysis_status === "COMPLETED" ? (
-              <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Category</p>
-                  <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{analysisComplaint.category || "Completed"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
-                  <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">
-                    {analysisComplaint.prediction_confidence === null || analysisComplaint.prediction_confidence === undefined
-                      ? "N/A"
-                      : `${((Number(analysisComplaint.prediction_confidence) <= 1 ? Number(analysisComplaint.prediction_confidence) * 100 : Number(analysisComplaint.prediction_confidence))).toFixed(2)}%`}
-                  </p>
-                </div>
+            <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">AI Suggested Category</p>
+                <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{analysisComplaint?.category || "Pending"}</p>
               </div>
-            ) : null}
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
+                <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidenceText}</p>
+              </div>
+            </div>
           </div>
         ) : null}
 

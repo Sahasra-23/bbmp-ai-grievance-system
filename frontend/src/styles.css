@@ -28,3 +28,4 @@
     @apply inline-flex items-center justify-center rounded-full bg-[#0b4f92] px-6 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/20 transition hover:-translate-y-0.5 hover:bg-[#062b57] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-[#0b4f92];
   }
 }
+

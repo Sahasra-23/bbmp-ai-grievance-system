@@ -62,6 +62,11 @@ def serialize_complaint(complaint: Complaint):
         "description": complaint.description,
         "status": complaint.status,
         "category": complaint.category,
+        "latitude": complaint.latitude,
+        "longitude": complaint.longitude,
+        "address": getattr(complaint, "address", None),
+        "ward_number": getattr(complaint, "ward_number", None),
+        "ward_name": getattr(complaint, "ward_name", None),
         "image_path": complaint.image_path,
         "image_url": image_url,
         "text_prediction": getattr(complaint, "text_prediction", None),
@@ -129,6 +134,18 @@ def ensure_database_columns():
             connection.execute(
                 text("ALTER TABLE complaints ADD COLUMN category_verified VARCHAR DEFAULT 'false'")
             )
+            connection.commit()
+    if "address" not in columns:
+        with engine.connect() as connection:
+            connection.execute(text("ALTER TABLE complaints ADD COLUMN address VARCHAR"))
+            connection.commit()
+    if "ward_number" not in columns:
+        with engine.connect() as connection:
+            connection.execute(text("ALTER TABLE complaints ADD COLUMN ward_number VARCHAR"))
+            connection.commit()
+    if "ward_name" not in columns:
+        with engine.connect() as connection:
+            connection.execute(text("ALTER TABLE complaints ADD COLUMN ward_name VARCHAR"))
             connection.commit()
 
 
@@ -288,6 +305,9 @@ def create_complaint(
     description: str = Form(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
+    address: str = Form(None),
+    ward_number: str = Form(None),
+    ward_name: str = Form(None),
     image: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -319,6 +339,9 @@ def create_complaint(
             description=description,
             latitude=latitude,
             longitude=longitude,
+            address=address,
+            ward_number=ward_number,
+            ward_name=ward_name,
             status="OPEN",
             category=None,
             image_path=stored_image_path,
@@ -432,6 +455,47 @@ def analyze_complaint_background(complaint_id: int, description: str, image_path
             print("=== AI ANALYSIS COMPLETE ===")
     finally:
         db.close()
+@app.get("/public/complaints")
+def get_public_complaints():
+    db: Session = SessionLocal()
+    try:
+        complaints = db.query(Complaint).all()
+        return [
+            {
+                "id": c.id,
+                "title": c.title,
+                "category": c.category,
+                "status": c.status,
+                "ward_name": c.ward_name,
+                "latitude": c.latitude,
+                "longitude": c.longitude,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in complaints if c.latitude is not None and c.longitude is not None
+        ]
+    finally:
+        db.close()
+
+
+@app.get("/public/stats")
+def get_public_stats():
+    db: Session = SessionLocal()
+    try:
+        complaints = db.query(Complaint).all()
+        return {
+            "total": len(complaints),
+            "open": sum(1 for c in complaints if (c.status or "OPEN").upper() == "OPEN"),
+            "in_progress": sum(1 for c in complaints if (c.status or "").upper() == "WORKING"),
+            "completed": sum(1 for c in complaints if (c.status or "").upper() == "CLOSED"),
+            "roads": sum(1 for c in complaints if (c.category or "").lower() == "roads"),
+            "sanitation": sum(1 for c in complaints if (c.category or "").lower() == "sanitation"),
+            "water_supply": sum(1 for c in complaints if (c.category or "").lower() == "water supply"),
+            "electrical": sum(1 for c in complaints if (c.category or "").lower() in ["electricity", "electrical", "street light"]),
+        }
+    finally:
+        db.close()
+
+
 @app.get("/my-complaints")
 def get_my_complaints(
     user=Depends(get_current_user)

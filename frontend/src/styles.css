@@ -11,6 +11,7 @@
     min-width: 320px;
     margin: 0;
     font-family: Verdana, Geneva, sans-serif;
+    @apply transition-colors duration-300;
   }
 
   ::selection {
@@ -21,11 +22,23 @@
 
 @layer components {
   .input {
-    @apply w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-[#061a3a] outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100;
+    @apply w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-[#061a3a] outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-100 dark:focus:border-cyan-500 dark:focus:ring-cyan-950/30;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-full bg-[#0b4f92] px-6 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/20 transition hover:-translate-y-0.5 hover:bg-[#062b57] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-[#0b4f92];
+    @apply inline-flex items-center justify-center rounded-full bg-[#0b4f92] px-6 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/20 transition-all duration-200 hover:scale-[1.03] hover:shadow-xl hover:bg-[#062b57] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 disabled:hover:bg-[#0b4f92] dark:bg-cyan-600 dark:hover:bg-cyan-700 dark:shadow-cyan-950/20;
+  }
+
+  .ui-card {
+    @apply rounded-3xl border border-sky-100/50 bg-[#f8fbff] p-5 shadow-sm transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-slate-950/25;
+  }
+
+  .ui-card-hover {
+    @apply hover:-translate-y-1 hover:shadow-md hover:shadow-slate-900/5 dark:hover:shadow-slate-950/30;
+  }
+
+  .ui-interactive {
+    @apply transition-all duration-200 hover:scale-[1.02] active:scale-[0.98];
   }
 }
 

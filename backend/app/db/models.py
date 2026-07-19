@@ -54,6 +54,10 @@ class Complaint(Base):
     user_corrected = Column(String, default="false")
     category_verified = Column(String, default="false")
 
+    address = Column(String)
+    ward_number = Column(String)
+    ward_name = Column(String)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # FOREIGN KEYS

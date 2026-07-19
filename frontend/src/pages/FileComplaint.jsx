@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { getApiError } from "../api";
 import FormField from "../components/FormField";
+import LocationPicker from "../components/LocationPicker";
 
 export default function FileComplaint() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ title: "", description: "", latitude: "", longitude: "" });
+  const [form, setForm] = useState({ title: "", description: "", latitude: "", longitude: "", address: "", ward_number: "", ward_name: "" });
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [loading, setLoading] = useState(false);
@@ -116,6 +117,9 @@ export default function FileComplaint() {
       payload.append("description", form.description.trim());
       payload.append("latitude", Number(form.latitude));
       payload.append("longitude", Number(form.longitude));
+      if (form.address) payload.append("address", form.address.trim());
+      if (form.ward_number) payload.append("ward_number", form.ward_number.trim());
+      if (form.ward_name) payload.append("ward_name", form.ward_name.trim());
       if (image) {
         payload.append("image", image);
       }
@@ -126,7 +130,7 @@ export default function FileComplaint() {
         complaint_id: data.complaint_id,
         analysis_status: "PENDING",
       });
-      setForm({ title: "", description: "", latitude: "", longitude: "" });
+      setForm({ title: "", description: "", latitude: "", longitude: "", address: "", ward_number: "", ward_name: "" });
       setImage(null);
       URL.revokeObjectURL(imagePreview);
       setImagePreview("");
@@ -152,7 +156,7 @@ export default function FileComplaint() {
         </p>
       </aside>
 
-      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8">
+      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8 dark:border-slate-800 dark:bg-slate-900/90">
         <div className="space-y-5">
           <FormField label="Title" id="title">
             <input id="title" name="title" required value={form.title} onChange={updateField} className="input" placeholder="Pothole near bus stop" />
@@ -162,15 +166,7 @@ export default function FileComplaint() {
             <textarea id="description" name="description" required rows="5" value={form.description} onChange={updateField} className="input resize-none" placeholder="Describe the issue, nearby landmark, and urgency." />
           </FormField>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <FormField label="Latitude" id="latitude">
-              <input id="latitude" name="latitude" type="number" step="any" required value={form.latitude} onChange={updateField} className="input" placeholder="12.9716" />
-            </FormField>
-
-            <FormField label="Longitude" id="longitude">
-              <input id="longitude" name="longitude" type="number" step="any" required value={form.longitude} onChange={updateField} className="input" placeholder="77.5946" />
-            </FormField>
-          </div>
+          <LocationPicker form={form} setForm={setForm} />
 
           <FormField label="Complaint image" id="image">
             <input
@@ -185,24 +181,24 @@ export default function FileComplaint() {
           </FormField>
 
           {imagePreview ? (
-            <div className="overflow-hidden rounded-3xl border border-sky-100 bg-sky-50 p-3">
+            <div className="overflow-hidden rounded-3xl border border-sky-100 bg-sky-50 p-3 dark:border-slate-800 dark:bg-slate-950/20">
               <img alt="Selected complaint preview" className="max-h-72 w-full rounded-2xl object-cover" src={imagePreview} />
             </div>
           ) : null}
         </div>
 
         {submittedComplaint ? (
-          <div className="mt-5 rounded-[1.75rem] border border-sky-100 bg-sky-50 p-5 text-[#0b6f8f] shadow-sm">
+          <div className="mt-5 rounded-[1.75rem] border border-sky-100 bg-sky-50 p-5 text-[#0b6f8f] shadow-sm dark:border-slate-800 dark:bg-slate-950/30 dark:text-cyan-400">
             <p className="text-sm font-black uppercase tracking-[0.22em]">Complaint submitted successfully</p>
-            <p className="mt-3 font-display text-3xl font-black text-[#061a3a]">Complaint ID #{submittedComplaint.complaint_id}</p>
-            <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2">
+            <p className="mt-3 font-display text-3xl font-black text-[#061a3a] dark:text-white">Complaint ID #{submittedComplaint.complaint_id}</p>
+            <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2 dark:bg-slate-900 dark:ring-slate-850">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">AI Suggested Category</p>
-                <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{analysisComplaint?.category || "Pending"}</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">AI Suggested Category</p>
+                <p className="mt-2 font-display text-2xl font-black text-[#061a3a] dark:text-white">{analysisComplaint?.category || "Pending"}</p>
               </div>
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Confidence</p>
-                <p className="mt-2 font-display text-2xl font-black text-[#061a3a]">{confidenceText}</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Confidence</p>
+                <p className="mt-2 font-display text-2xl font-black text-[#061a3a] dark:text-white">{confidenceText}</p>
               </div>
             </div>
           </div>

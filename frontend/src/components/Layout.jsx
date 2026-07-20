@@ -93,9 +93,38 @@ export default function Layout() {
     };
   }, [authed]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(event) {
+      const trigger = document.getElementById("profile-trigger");
+      const dropdown = document.getElementById("profile-dropdown");
+      if (
+        (trigger && trigger.contains(event.target)) ||
+        (dropdown && dropdown.contains(event.target))
+      ) {
+        return;
+      }
+      setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
   function handleLogout() {
     clearToken();
-    navigate("/login", { state: { authMessage: "You have been logged out." } });
+    setProfile(null);
+    setMenuOpen(false);
+    sessionStorage.clear();
+    const themeVal = localStorage.getItem("theme");
+    localStorage.clear();
+    if (themeVal) {
+      localStorage.setItem("theme", themeVal);
+    }
+    navigate("/login", { replace: true, state: { authMessage: "You have been logged out." } });
   }
 
   const resolvedCount = profile?.summary?.resolved ?? 0;
@@ -125,6 +154,7 @@ export default function Layout() {
           {authed ? (
             <div className="relative">
               <button
+                id="profile-trigger"
                 className="ui-interactive inline-flex items-center gap-3 rounded-full border border-white/80 bg-white/80 px-4 py-2.5 text-sm font-bold text-[#061a3a] shadow-lg shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200"
                 onClick={() => setMenuOpen((current) => !current)}
                 type="button"
@@ -136,7 +166,7 @@ export default function Layout() {
               </button>
 
               {menuOpen ? (
-                <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[22rem] overflow-hidden rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-2xl shadow-slate-950/15 dark:border-slate-800 dark:bg-slate-900">
+                <div id="profile-dropdown" className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[22rem] overflow-hidden rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-2xl shadow-slate-950/15 dark:border-slate-800 dark:bg-slate-900">
                   <div className="rounded-[1.4rem] bg-gradient-to-br from-[#062b57] via-[#0b4f92] to-[#0a7ea4] p-4 text-white">
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-lg font-black">

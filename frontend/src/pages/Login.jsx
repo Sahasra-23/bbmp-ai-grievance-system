@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import api, { getApiError } from "../api";
-import { saveToken } from "../auth";
+import { saveToken, isAuthenticated } from "../auth";
 import FormField from "../components/FormField";
 import PasswordInput from "../components/PasswordInput";
+
+import { Navigate } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -11,6 +13,40 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [message, setMessage] = useState(location.state?.authMessage || "");
   const [loading, setLoading] = useState(false);
+  const [redirectPath, setRedirectPath] = useState(null);
+
+  async function resolveRedirectPath() {
+    try {
+      const { data: profileData } = await api.get("/me");
+      const role = (profileData?.role || "").toLowerCase();
+      return role === "admin" ? "/admin" : "/";
+    } catch {
+      return "/";
+    }
+  }
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      setRedirectPath(null);
+      return;
+    }
+
+    let isActive = true;
+
+    resolveRedirectPath().then((nextPath) => {
+      if (isActive) {
+        setRedirectPath(nextPath);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
+  }
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -42,7 +78,8 @@ export default function Login() {
       }
 
       saveToken(data.access_token);
-      navigate(location.state?.from || "/my-complaints", { replace: true });
+      const nextPath = await resolveRedirectPath();
+      navigate(nextPath, { replace: true });
     } catch (error) {
       setMessage(getApiError(error, "Unable to login. Please check your email and password."));
     } finally {
@@ -53,12 +90,12 @@ export default function Login() {
   return (
     <section className="mx-auto grid max-w-5xl items-center gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr]">
       <div>
-        <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0b6f8f]">Citizen access</p>
-        <h1 className="mt-4 font-display text-5xl font-black leading-none text-[#061a3a]">Welcome back.</h1>
-        <p className="mt-5 text-slate-600">Login to file a complaint or review the status and AI category of your earlier reports.</p>
+        <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0b6f8f] dark:text-cyan-400">Citizen access</p>
+        <h1 className="mt-4 font-display text-5xl font-black leading-none text-[#061a3a] dark:text-white">Welcome back.</h1>
+        <p className="mt-5 text-slate-600 dark:text-slate-350">Login to file a complaint or review the status and AI category of your earlier reports.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8">
+      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8 dark:border-slate-800 dark:bg-slate-900/90">
         <div className="space-y-5">
           <FormField label="Email" id="email">
             <input
@@ -90,8 +127,8 @@ export default function Login() {
           {loading ? "Logging in..." : "Login"}
         </button>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
-          New here? <Link className="font-bold text-[#0b4f92] hover:underline" to="/register">Create an account</Link>
+        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
+          New here? <Link className="font-bold text-[#0b4f92] hover:underline dark:text-cyan-400" to="/register">Create an account</Link>
         </p>
       </form>
     </section>

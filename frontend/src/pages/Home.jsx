@@ -82,7 +82,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="space-y-16 py-8 lg:py-16">
+    <div className="space-y-16 pt-2 pb-8 lg:pt-4 lg:pb-16">
       <section className="grid items-center gap-8 lg:grid-cols-[1.02fr_0.98fr]">
         <div className="space-y-7">
           <div className="inline-flex rounded-full border border-sky-200 bg-white/80 px-4 py-2 text-sm font-bold text-[#0b6f8f] shadow-sm dark:border-slate-800 dark:bg-slate-850/80 dark:text-cyan-400">
@@ -132,7 +132,7 @@ export default function Home() {
           </div>
           <div className="h-px bg-slate-200/60 dark:bg-slate-800" />
           
-          <div className={`relative h-[585px] rounded-[2rem] border border-white/80 bg-white/80 p-3 shadow-civic backdrop-blur transition-opacity duration-500 dark:border-slate-800 dark:bg-slate-900/45 ${mapLoaded ? "opacity-100" : "opacity-50"}`}>
+          <div className={`relative h-[460px] rounded-[2rem] border border-white/80 bg-white/80 p-3 shadow-civic backdrop-blur transition-opacity duration-500 dark:border-slate-800 dark:bg-slate-900/45 ${mapLoaded ? "opacity-100" : "opacity-50"}`}>
             <div className="h-full w-full overflow-hidden rounded-2xl ring-1 ring-slate-200/80 relative z-0">
               <MapContainer
                 center={[12.9716, 77.5946]}

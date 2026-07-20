@@ -87,9 +87,9 @@ export default function LocationPicker({ form, setForm }) {
   return (
     <div className="space-y-5">
       <div>
-        <label className="mb-2 block text-sm font-bold text-[#0b6f8f]">Select Location on Map</label>
-        <p className="mb-2 text-xs text-slate-500">Click or drag the marker to pinpoint the issue location.</p>
-        <div className="h-64 w-full overflow-hidden rounded-2xl border border-sky-100 ring-1 ring-black/5">
+        <label className="mb-2 block text-sm font-bold text-[#0b6f8f] dark:text-cyan-400">Select Location on Map</label>
+        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Click or drag the marker to pinpoint the issue location.</p>
+        <div className="h-64 w-full overflow-hidden rounded-2xl border border-sky-100 ring-1 ring-black/5 dark:border-slate-800">
           <MapContainer center={position} zoom={13} scrollWheelZoom={false} className="h-full w-full">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'

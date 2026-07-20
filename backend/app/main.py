@@ -241,7 +241,7 @@ def register(data: UserCreate):
             name=data.name.strip(),
             email=email,
             password_hash=hashed_pw,
-            role=data.role
+            role="citizen"
         )
 
         db.add(user)

@@ -3,15 +3,19 @@ import { Link, useNavigate } from "react-router-dom";
 import api, { getApiError } from "../api";
 import FormField from "../components/FormField";
 import PasswordInput from "../components/PasswordInput";
-
-const roles = ["citizen", "officer", "admin"];
+import { isAuthenticated } from "../auth";
+import { Navigate } from "react-router-dom";
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "citizen" });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
   const [loading, setLoading] = useState(false);
+
+  if (isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -30,10 +34,9 @@ export default function Register() {
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,
-        role: form.role,
       };
 
-      if (!payload.name || !payload.email || !payload.password || !payload.role) {
+      if (!payload.name || !payload.email || !payload.password) {
         setMessage("Please fill in all fields.");
         return;
       }
@@ -56,11 +59,11 @@ export default function Register() {
   return (
     <section className="mx-auto max-w-3xl py-8">
       <div className="mb-7 text-center">
-        <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0b6f8f]">Create account</p>
-        <h1 className="mt-3 font-display text-5xl font-black leading-none text-[#061a3a]">Join the civic loop.</h1>
+        <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0b6f8f] dark:text-cyan-400">Create account</p>
+        <h1 className="mt-3 font-display text-5xl font-black leading-none text-[#061a3a] dark:text-white">Join the civic loop.</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8">
+      <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-civic backdrop-blur sm:p-8 dark:border-slate-800 dark:bg-slate-900/90">
         <div className="grid gap-5 sm:grid-cols-2">
           <FormField label="Full name" id="name">
             <input id="name" name="name" required value={form.name} onChange={updateField} className="input" placeholder="Your name" />
@@ -80,12 +83,6 @@ export default function Register() {
               placeholder="Minimum 6 characters"
             />
           </FormField>
-
-          <FormField label="Role" id="role">
-            <select id="role" name="role" value={form.role} onChange={updateField} className="input capitalize">
-              {roles.map((role) => <option key={role} value={role}>{role}</option>)}
-            </select>
-          </FormField>
         </div>
 
         {message ? (
@@ -100,8 +97,8 @@ export default function Register() {
           {loading ? "Creating account..." : "Register"}
         </button>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
-          Already registered? <Link className="font-bold text-[#0b4f92] hover:underline" to="/login">Login</Link>
+        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
+          Already registered? <Link className="font-bold text-[#0b4f92] hover:underline dark:text-cyan-400" to="/login">Login</Link>
         </p>
       </form>
     </section>

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import FileComplaint from "./pages/FileComplaint";
@@ -42,17 +43,17 @@ export default function App() {
         <Route
           path="admin"
           element={
-            <ProtectedRoute>
+            <AdminProtectedRoute>
               <AdminDashboard />
-            </ProtectedRoute>
+            </AdminProtectedRoute>
           }
         />
         <Route
           path="admin/qa"
           element={
-            <ProtectedRoute>
+            <AdminProtectedRoute>
               <QADashboard />
-            </ProtectedRoute>
+            </AdminProtectedRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

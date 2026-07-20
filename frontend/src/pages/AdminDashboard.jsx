@@ -156,6 +156,9 @@ export default function AdminDashboard() {
             <Link to="/admin/qa" className="inline-flex items-center justify-center rounded-full bg-[#062b57] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0b4f92] dark:bg-cyan-600 dark:hover:bg-cyan-700">
               QA Dashboard
             </Link>
+            <Link to="/admin/create-admin" className="inline-flex items-center justify-center rounded-full bg-[#062b57] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0b4f92] dark:bg-cyan-600 dark:hover:bg-cyan-700">
+              + Create Admin
+            </Link>
             <Link to="/" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-[#061a3a] transition hover:border-sky-300 hover:text-[#0b4f92] dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200">
               Back to home
             </Link>

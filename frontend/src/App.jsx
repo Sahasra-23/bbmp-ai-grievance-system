@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import MyComplaints from "./pages/MyComplaints";
 import Register from "./pages/Register";
 import AdminDashboard from "./pages/AdminDashboard";
+import CreateAdmin from "./pages/CreateAdmin";
 import QADashboard from "./pages/QADashboard";
 
 export default function App() {

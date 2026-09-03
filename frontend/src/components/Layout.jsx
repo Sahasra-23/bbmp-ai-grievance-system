@@ -198,6 +198,11 @@ export default function Layout() {
                   </div>
 
                   <div className="mt-4 grid gap-2">
+                    {(profile?.role || "").toUpperCase() === "ADMIN" ? (
+                      <NavLink className={navLinkClass} to="/admin" onClick={() => setMenuOpen(false)}>
+                        Admin Dashboard
+                      </NavLink>
+                    ) : null}
                     <NavLink className={navLinkClass} to="/complaints/new" onClick={() => setMenuOpen(false)}>
                       File Complaint
                     </NavLink>

@@ -2,7 +2,7 @@ import argparse
 import json
 import logging
 
-from matplotlib import text
+
 
 from ml.image_predict import predict_image_category
 from ml.predict import predict_category_with_confidence

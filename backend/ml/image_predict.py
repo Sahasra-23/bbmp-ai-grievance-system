@@ -1,10 +1,3 @@
-import sys
-
-print("=" * 60)
-print("PYTHON EXECUTABLE:", sys.executable)
-print("PYTHON VERSION:", sys.version)
-print("=" * 60)
-####
 import argparse
 import json
 import sys
@@ -63,10 +56,8 @@ def import_tensorflow():
         import tensorflow as tf
         print("✅ TensorFlow imported successfully:", tf.__version__)
         return tf
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        raise
+    except Exception as exc:
+        raise ImagePredictionError(f"TensorFlow is unavailable: {exc}") from exc
 
 
 def load_image_model():

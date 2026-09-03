@@ -26,6 +26,23 @@ def normalize_category(category):
     return aliases.get(normalized, normalized)
 
 
+CATEGORY_DISPLAY_MAPPING = {
+    "electricity": "Street Light",
+    "roads": "Roads",
+    "sanitation": "Sanitation",
+    "water": "Water Supply",
+    "water supply": "Water Supply",
+    "street light": "Street Light",
+}
+
+
+def map_category_to_display(category):
+    if not category:
+        return category
+    normalized = str(category).strip().lower()
+    return CATEGORY_DISPLAY_MAPPING.get(normalized, str(category).title())
+
+
 def predict_category_with_confidence(text):
     if not text or not text.strip():
         raise ValueError("Complaint text cannot be empty")
@@ -50,6 +67,3 @@ def predict_category_with_confidence(text):
 def predict_category(text):
     prediction = predict_category_with_confidence(text)
     return prediction["category"]
-
-
-# Test prediction

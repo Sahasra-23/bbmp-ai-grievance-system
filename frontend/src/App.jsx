@@ -50,6 +50,15 @@ export default function App() {
           }
         />
         <Route
+          path="admin/create-admin"
+          element={
+            <AdminProtectedRoute>
+              <CreateAdmin />
+            </AdminProtectedRoute>
+          }
+        />
+  
+        <Route
           path="admin/qa"
           element={
             <AdminProtectedRoute>

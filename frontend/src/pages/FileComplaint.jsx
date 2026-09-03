@@ -18,6 +18,17 @@ export default function FileComplaint() {
       return undefined;
     }
 
+    if (analysisComplaint?.analysis_status === "COMPLETED" || analysisComplaint?.analysis_status === "FAILED") {
+      const redirectTimer = window.setTimeout(() => {
+        navigate("/my-complaints", {
+          replace: true,
+          state: { highlightComplaintId: submittedComplaint.complaint_id },
+        });
+      }, 2000);
+
+      return () => window.clearTimeout(redirectTimer);
+    }
+
     let cancelled = false;
     let pollTimer = null;
 
@@ -58,7 +69,7 @@ export default function FileComplaint() {
       }
       window.clearTimeout(redirectTimer);
     };
-  }, [submittedComplaint?.complaint_id, navigate]);
+  }, [submittedComplaint?.complaint_id, analysisComplaint?.analysis_status, navigate]);
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -126,10 +137,7 @@ export default function FileComplaint() {
 
       const { data } = await api.post("/complaints", payload);
       setSubmittedComplaint(data);
-      setAnalysisComplaint({
-        complaint_id: data.complaint_id,
-        analysis_status: "PENDING",
-      });
+      setAnalysisComplaint(data);
       setForm({ title: "", description: "", latitude: "", longitude: "", address: "", ward_number: "", ward_name: "" });
       setImage(null);
       URL.revokeObjectURL(imagePreview);
@@ -141,10 +149,6 @@ export default function FileComplaint() {
     }
   }
 
-  const confidenceValue = analysisComplaint?.prediction_confidence;
-  const confidenceText = confidenceValue === null || confidenceValue === undefined
-    ? "N/A"
-    : `${((Number(confidenceValue) <= 1 ? Number(confidenceValue) * 100 : Number(confidenceValue))).toFixed(0)}%`;
 
   return (
     <section className="grid gap-8 py-8 lg:grid-cols-[0.82fr_1.18fr]">
@@ -191,14 +195,10 @@ export default function FileComplaint() {
           <div className="mt-5 rounded-[1.75rem] border border-sky-100 bg-sky-50 p-5 text-[#0b6f8f] shadow-sm dark:border-slate-800 dark:bg-slate-950/30 dark:text-cyan-400">
             <p className="text-sm font-black uppercase tracking-[0.22em]">Complaint submitted successfully</p>
             <p className="mt-3 font-display text-3xl font-black text-[#061a3a] dark:text-white">Complaint ID #{submittedComplaint.complaint_id}</p>
-            <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-sky-100 sm:grid-cols-2 dark:bg-slate-900 dark:ring-slate-850">
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-sky-100 dark:bg-slate-900 dark:ring-slate-850">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">AI Suggested Category</p>
-                <p className="mt-2 font-display text-2xl font-black text-[#061a3a] dark:text-white">{analysisComplaint?.category || "Pending"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Confidence</p>
-                <p className="mt-2 font-display text-2xl font-black text-[#061a3a] dark:text-white">{confidenceText}</p>
+                <p className="mt-2 font-display text-2xl font-black text-[#061a3a] dark:text-white">{analysisComplaint?.category || analysisComplaint?.predicted_category || "Pending"}</p>
               </div>
             </div>
           </div>

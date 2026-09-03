@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
+#from backend.app.schemas import user
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -30,7 +31,7 @@ from ml.image_predict import (
     ImagePredictionError,
     predict_image_category,
 )
-from ml.predict import predict_category_with_confidence
+from ml.predict import map_category_to_display, predict_category_with_confidence
 
 
 ALLOWED_STATUSES = {"OPEN", "WORKING", "CLOSED"}
@@ -61,7 +62,7 @@ def serialize_complaint(complaint: Complaint):
         "title": complaint.title,
         "description": complaint.description,
         "status": complaint.status,
-        "category": complaint.category,
+        "category": map_category_to_display(complaint.category),
         "latitude": complaint.latitude,
         "longitude": complaint.longitude,
         "address": getattr(complaint, "address", None),
@@ -236,6 +237,7 @@ def register(data: UserCreate):
             )
 
         hashed_pw = hash_password(data.password)
+        print("REGISTER HASH:", hashed_pw)
 
         user = User(
             name=data.name.strip(),
@@ -260,29 +262,56 @@ def register(data: UserCreate):
         db.close()
 
 @app.post("/login")
-def login(data: UserLogin):
+def login(data: dict):
+    print("LOGIN FUNCTION VERSION: DICT")
+    import re
 
     db = SessionLocal()
+    invalid_credentials = HTTPException(
+        status_code=401,
+        detail="Invalid email or password"
+    )
 
     try:
+        email = str(data.get("email", "")).strip().lower()
+        password = str(data.get("password", ""))
+
+        if not email or not password:
+            raise invalid_credentials
+
+        if len(email) > 254 or len(password) > 128:
+            raise invalid_credentials
+
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+            raise invalid_credentials
+
         user = db.query(User).filter(
-            User.email == data.email.strip().lower()
+            User.email == email
         ).first()
-
+  
         if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password"
-            )
+            raise invalid_credentials
+        
+        
 
-        if not verify_password(
-            data.password,
+        print("Login email:", email)
+        print("User found:", user is not None)
+        print("DB email:", user.email)
+        print("Stored hash:", user.password_hash[:20] + "...")
+
+        password_ok = verify_password(
+            password,
             user.password_hash
-        ):
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password"
-            )
+        )
+
+        print("Password matches:", password_ok)
+
+        if not password_ok:
+            raise invalid_credentials
+
+        if user:
+            print("DB email:", user.email)
+            print("Stored hash:", user.password_hash[:20] + "...")
 
         token = create_access_token(
             {"sub": user.email}
@@ -333,6 +362,28 @@ def create_complaint(
 
         stored_image_path = f"uploads/{saved_image_path.name}"
 
+        # Synchronous text prediction
+        raw_text_pred = None
+        display_cat = None
+        prediction_confidence = None
+        prediction_source = None
+        analysis_status = "PENDING"
+
+        try:
+            prediction_result = predict_category_with_confidence(description)
+            raw_text_pred = prediction_result["category"]
+            display_cat = map_category_to_display(raw_text_pred)
+            prediction_confidence = float(prediction_result["confidence"])
+            prediction_source = "text"
+            analysis_status = "COMPLETED"
+        except Exception as text_err:
+            print("Synchronous text prediction failed:", text_err)
+            raw_text_pred = None
+            display_cat = None
+            prediction_confidence = None
+            prediction_source = None
+            analysis_status = "FAILED"
+
         # Create complaint
         complaint = Complaint(
             title=title,
@@ -343,11 +394,12 @@ def create_complaint(
             ward_number=ward_number,
             ward_name=ward_name,
             status="OPEN",
-            category=None,
+            category=display_cat,
             image_path=stored_image_path,
-            prediction_confidence=None,
-            prediction_source=None,
-            analysis_status="PENDING",
+            text_prediction=raw_text_pred,
+            prediction_confidence=prediction_confidence,
+            prediction_source=prediction_source,
+            analysis_status=analysis_status,
             user_id=db_user.id
         )
         db.add(complaint)
@@ -355,7 +407,7 @@ def create_complaint(
         db.refresh(complaint)
 
         print("Complaint ID:", complaint.id)
-        print("AI analysis in progress...")
+        print("Text prediction completed synchronously:", display_cat, prediction_confidence)
 
         background_tasks.add_task(
             analyze_complaint_background,
@@ -365,12 +417,14 @@ def create_complaint(
         )
 
         return {
-
             "message": "Complaint created",
             "complaint_id": complaint.id,
             "created_by": db_user.email,
-            "predicted_category": None,
-            "prediction": None,
+            "category": complaint.category,
+            "predicted_category": complaint.category,
+            "prediction_confidence": complaint.prediction_confidence,
+            "prediction_source": complaint.prediction_source,
+            "analysis_status": complaint.analysis_status,
             "image_path": stored_image_path
         }
 
@@ -407,54 +461,77 @@ def analyze_complaint_background(complaint_id: int, description: str, image_path
             print("Complaint not found for analysis:", complaint_id)
             return
 
+        # Optional image prediction attempt
         try:
-            print("Text prediction started")
-            text_prediction = predict_category_with_confidence(description)
-            print("Text prediction completed")
-            print("Text prediction result:", text_prediction)
+            print("Optional image prediction started")
+            image_prediction = predict_image_category(Path(image_path))
+            print("Image prediction completed:", image_prediction)
 
-            try:
-                print("Image prediction started")
-                image_prediction = predict_image_category(Path(image_path))
-                print("Image prediction completed")
-                print("Image prediction result:", image_prediction)
+            text_pred_obj = {
+                "category": complaint.text_prediction or "unknown",
+                "confidence": complaint.prediction_confidence or 0.0,
+            }
+            final_pred = choose_final_prediction(text_pred_obj, image_prediction)
+            complaint.category = map_category_to_display(final_pred["category"])
+            complaint.image_prediction = image_prediction["category"]
+            complaint.prediction_confidence = float(final_pred["confidence"])
+            complaint.prediction_source = "hybrid"
+            complaint.analysis_status = "COMPLETED"
+        except Exception as img_err:
+            print("Optional image prediction failed or unavailable:", img_err)
+            complaint.image_prediction = "UNAVAILABLE"
+            # Keep text prediction intact and status COMPLETED if text prediction succeeded
+            if not complaint.analysis_status or complaint.analysis_status == "PENDING":
+                complaint.analysis_status = "COMPLETED" if complaint.category else "FAILED"
 
-                print("Hybrid prediction started")
-                final_prediction = choose_final_prediction(
-                    text_prediction,
-                    image_prediction,
-                )
-                print("Hybrid prediction completed")
-
-                complaint.category = final_prediction["category"]
-                complaint.text_prediction = text_prediction["category"]
-                complaint.image_prediction = image_prediction["category"]
-                complaint.prediction_confidence = final_prediction["confidence"]
-                complaint.prediction_source = "hybrid"
-                complaint.analysis_status = "COMPLETED"
-            except Exception:
-                import traceback
-                traceback.print_exc()
-                print("Image prediction failed, falling back to text prediction")
-                complaint.category = text_prediction["category"]
-                complaint.text_prediction = text_prediction["category"]
-                complaint.image_prediction = "FAILED"
-                complaint.prediction_confidence = text_prediction["confidence"]
-                complaint.prediction_source = "text_fallback"
-                complaint.analysis_status = "COMPLETED"
-
-            print("Database update started")
-            db.commit()
-            print("Database updated successfully")
-            print("=== AI ANALYSIS COMPLETE ===")
-        except Exception:
-            import traceback
-            traceback.print_exc()
-            complaint.analysis_status = "FAILED"
-            db.commit()
-            print("=== AI ANALYSIS COMPLETE ===")
+        db.commit()
+        print("=== AI ANALYSIS COMPLETE ===")
     finally:
         db.close()
+
+
+@app.post("/admin/create-admin")
+def create_admin_endpoint(data: dict, user=Depends(get_current_user)):
+    db: Session = SessionLocal()
+
+    try:
+        db_user = db.query(User).filter(User.email == user["sub"]).first()
+        if not db_user:
+            raise HTTPException(status_code=401, detail="User account not found. Please login again.")
+
+        if (db_user.role or "").upper() != "ADMIN":
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        name = str(data.get("name", "")).strip()
+        email = str(data.get("email", "")).strip().lower()
+        password = str(data.get("password", ""))
+
+        if not name or not email or not password:
+            raise HTTPException(status_code=400, detail="Name, email, and password are required")
+
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+        hashed_pw = hash_password(password)
+
+        new_admin = User(
+            name=name,
+            email=email,
+            password_hash=hashed_pw,
+            role="ADMIN",
+        )
+        db.add(new_admin)
+        db.commit()
+
+        return {"message": "Administrator created successfully."}
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    finally:
+        db.close()
+
+
 @app.get("/public/complaints")
 def get_public_complaints():
     db: Session = SessionLocal()

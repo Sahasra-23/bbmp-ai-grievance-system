@@ -464,14 +464,10 @@ export default function MyComplaints() {
                     />
                   ) : null}
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-5">
                     <div className="rounded-2xl bg-sky-50 px-4 py-3 ring-1 ring-sky-100 h-full flex flex-col justify-center dark:bg-slate-950/30 dark:ring-slate-800">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f] dark:text-cyan-400">Predicted Category</p>
                       <p className="mt-2 break-words font-display text-2xl font-black leading-tight text-[#061a3a] dark:text-white">{complaint.category || "Pending"}</p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-100 h-full flex flex-col justify-center dark:bg-slate-950/20 dark:ring-slate-800">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Confidence</p>
-                      <p className="mt-2 flex items-center break-words font-display text-2xl font-black leading-tight text-[#061a3a] dark:text-white">{confidence}</p>
                     </div>
                   </div>
 
@@ -549,14 +545,10 @@ export default function MyComplaints() {
                     </div>
                   )}
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="mt-4">
                     <div className="rounded-3xl bg-sky-50 p-5 ring-1 ring-sky-100 h-full flex flex-col justify-center dark:bg-slate-950/30 dark:ring-slate-800">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b6f8f] dark:text-cyan-400">Current Category</p>
                       <p className="mt-2 break-words font-display text-2xl font-black leading-tight text-[#061a3a] dark:text-white">{complaint.category || "Pending"}</p>
-                    </div>
-                    <div className="rounded-3xl bg-white p-5 ring-1 ring-slate-100 h-full flex flex-col justify-center dark:bg-slate-900 dark:ring-slate-800">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Confidence</p>
-                      <p className="mt-2 flex items-center break-words font-display text-2xl font-black leading-tight text-[#061a3a] dark:text-white">{confidence}</p>
                     </div>
                   </div>
 

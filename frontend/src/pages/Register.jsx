@@ -8,10 +8,11 @@ import { Navigate } from "react-router-dom";
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone_number: "", password: "" });
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
   const [loading, setLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
 
   if (isAuthenticated()) {
     return <Navigate to="/" replace />;
@@ -21,10 +22,47 @@ export default function Register() {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   }
 
+  function handlePhoneChange(event) {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 10);
+    setForm((current) => ({ ...current, phone_number: digits }));
+    if (phoneError) {
+      setPhoneError("");
+    }
+  }
+
+  function validatePhoneNumber(value) {
+    const cleanedValue = value.trim();
+
+    if (!cleanedValue) {
+      return "Phone number is required.";
+    }
+
+    if (!/^\d+$/.test(cleanedValue)) {
+      return "Phone number must contain only digits.";
+    }
+
+    if (cleanedValue.length !== 10) {
+      return "Phone number must be exactly 10 digits.";
+    }
+
+    if (!/^[6789]/.test(cleanedValue)) {
+      return "Phone number must start with 6, 7, 8, or 9.";
+    }
+
+    return "";
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     if (loading) return;
 
+    const phoneValidationError = validatePhoneNumber(form.phone_number);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      return;
+    }
+
+    setPhoneError("");
     setLoading(true);
     setMessage("");
     setMessageType("error");
@@ -33,10 +71,11 @@ export default function Register() {
       const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
+        phone_number: form.phone_number.trim(),
         password: form.password,
       };
 
-      if (!payload.name || !payload.email || !payload.password) {
+      if (!payload.name || !payload.email || !payload.phone_number || !payload.password) {
         setMessage("Please fill in all fields.");
         return;
       }
@@ -71,6 +110,22 @@ export default function Register() {
 
           <FormField label="Email" id="email">
             <input id="email" name="email" type="email" required value={form.email} onChange={updateField} className="input" placeholder="you@example.com" />
+          </FormField>
+
+          <FormField label="Phone Number" id="phone_number">
+            <input
+              id="phone_number"
+              name="phone_number"
+              type="tel"
+              required
+              value={form.phone_number}
+              onChange={handlePhoneChange}
+              className="input"
+              placeholder="9876543210"
+              inputMode="numeric"
+              autoComplete="tel"
+            />
+            {phoneError ? <p className="mt-2 text-sm font-semibold text-rose-600">{phoneError}</p> : null}
           </FormField>
 
           <FormField label="Password" id="password">

@@ -8,3 +8,7 @@ bbmp.db
 uploads/*
 !uploads/.gitkeep
 ml/dataset/
+
+
+bbmp.db
+backend/bbmp.sqbpro
